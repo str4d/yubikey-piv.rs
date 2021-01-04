@@ -58,3 +58,6 @@ untested = []
 
 [package.metadata.docs.rs]
 all-features = true
+
+[patch.crates-io]
+x509 = { git = "https://github.com/str4d/x509.rs", branch = "twitch" }

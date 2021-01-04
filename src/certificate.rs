@@ -49,6 +49,10 @@ use sha2::{Digest, Sha256};
 use std::convert::TryFrom;
 use std::fmt;
 use std::ops::DerefMut;
+use x509::{
+    der::{Oid, PrintableString},
+    RdnType,
+};
 use x509_parser::{parse_x509_certificate, x509::SubjectPublicKeyInfo};
 use zeroize::Zeroizing;
 
@@ -337,18 +341,22 @@ impl<'a> TryFrom<&'a [u8]> for Certificate {
 impl Certificate {
     /// Creates a new self-signed certificate for the given key. Writes the resulting
     /// certificate to the slot before returning it.
-    pub fn generate_self_signed(
+    pub fn generate_self_signed<O: Oid>(
         yubikey: &mut YubiKey,
         key: SlotId,
         serial: impl Into<Serial>,
         not_after: Option<DateTime<Utc>>,
-        subject: String,
+        subject: Vec<(RdnType, PrintableString)>,
         subject_pki: PublicKeyInfo,
+        exts: Vec<(O, &[u8])>,
     ) -> Result<Self, Error> {
         let serial = serial.into();
 
         // Issuer and subject are the same in self-signed certificates
-        let issuer = subject.clone();
+        let issuer = (0..subject.len()).map(|i| &subject[i]);
+        let subject = (0..subject.len()).map(|i| &subject[i]);
+
+        let exts = (0..exts.len()).map(|i| &exts[i]);
 
         let mut tbs_cert = Buffer::new(Vec::with_capacity(CB_OBJ_MAX));
 
@@ -358,14 +366,15 @@ impl Certificate {
         };
 
         cookie_factory::gen(
-            x509::write::tbs_certificate(
+            x509::write::tbs_certificate_with_extensions(
                 &serial.to_bytes(),
                 &signature_algorithm,
-                &issuer,
+                issuer,
                 Utc::now(),
                 not_after,
-                &subject,
+                subject,
                 &subject_pki,
+                exts,
             ),
             tbs_cert.deref_mut(),
         )
@@ -424,6 +433,15 @@ impl Certificate {
             data.deref_mut(),
         )
         .expect("can serialize to Vec");
+
+        let (issuer, subject) = parse_x509_certificate(&data)
+            .map(|(_, cert)| {
+                (
+                    cert.tbs_certificate.issuer.to_string(),
+                    cert.tbs_certificate.subject.to_string(),
+                )
+            })
+            .unwrap();
 
         let cert = Certificate {
             serial,

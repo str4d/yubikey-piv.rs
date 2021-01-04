@@ -10,6 +10,7 @@ use rsa::{hash::Hash::SHA2_256, PaddingScheme, PublicKey};
 use sha2::{Digest, Sha256};
 use std::convert::TryInto;
 use std::{env, sync::Mutex};
+use x509::RdnType;
 use yubikey_piv::{
     certificate::{Certificate, PublicKeyInfo},
     key::{self, AlgorithmId, Key, RetiredSlotId, SlotId},
@@ -137,7 +138,7 @@ fn generate_self_signed_cert(algorithm: AlgorithmId) -> Certificate {
         slot,
         serial,
         None,
-        "testSubject".to_owned(),
+        vec![(RdnType::CommonName, "testSubject".parse().unwrap())],
         generated,
     );
 
